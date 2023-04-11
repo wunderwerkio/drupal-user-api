@@ -8,10 +8,11 @@ use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Session\AccountProxyInterface;
 use Drupal\rest\Plugin\ResourceBase;
 use Drupal\user\UserInterface;
+use Drupal\user_api\ErrorCode;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
-use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\DependencyInjection\ContainerInterface;
+use Wunderwerk\JsonApiError\JsonApiErrorResponse;
 
 /**
  * Provides a resource to init account cancellation.
@@ -86,9 +87,11 @@ class InitAccountCancelResource extends ResourceBase {
     // User must be logged in.
     $currentUser = $this->getCurrentUser();
     if (!$currentUser->isAuthenticated()) {
-      return new JsonResponse(
-        ['error' => 'Not logged in!'],
-        Response::HTTP_UNAUTHORIZED,
+      return JsonApiErrorResponse::fromError(
+        status: 403,
+        code: ErrorCode::UNAUTHENTICATED->getCode(),
+        title: 'Unauthenticated',
+        detail: 'You are not authenticated.',
       );
     }
 

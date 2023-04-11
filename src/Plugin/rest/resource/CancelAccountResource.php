@@ -9,12 +9,14 @@ use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Session\AccountProxyInterface;
 use Drupal\rest\Plugin\ResourceBase;
 use Drupal\user\UserInterface;
+use Drupal\user_api\ErrorCode;
 use Drupal\verification\Service\RequestVerifier;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Wunderwerk\JsonApiError\JsonApiErrorResponse;
 
 /**
  * Provides a resource to cancel a user's account.
@@ -94,7 +96,12 @@ class CancelAccountResource extends ResourceBase {
   public function post(Request $request) {
     $user = $this->getCurrentUser();
     if (!$user || !$user->isAuthenticated()) {
-      return new JsonResponse(['error' => 'User not logged in.'], Response::HTTP_UNAUTHORIZED);
+      return JsonApiErrorResponse::fromError(
+        status: 403,
+        code: ErrorCode::UNAUTHENTICATED->getCode(),
+        title: 'Unauthenticated',
+        detail: 'You are not authenticated.',
+      );
     }
 
     $result = $this->verifier->verifyOperation($request, 'cancel-account', $user);
