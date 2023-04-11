@@ -1,0 +1,78 @@
+<?php
+
+use Drupal\Core\Entity\Query\QueryException;
+use Drupal\user\UserInterface;
+
+/**
+ * @file
+ * Module file.
+ */
+
+/**
+ * Implements hook_ENTITY_TYPE_update().
+ */
+function user_api_user_update(UserInterface $user) {
+  // Delete all tokens for a blocked user.
+  if ($user->isBlocked()) {
+    /** @var \Drupal\simple_oauth\ExpiredCollector $collector */
+    $collector = \Drupal::service('simple_oauth.expired_collector');
+
+    $tokens = _user_api_collect_refresh_tokens($user);
+    $collector->deleteMultipleTokens($tokens);
+  }
+}
+
+/**
+ * This function is effectively the same as
+ * ExpiredCollector::collectForAccount() but it
+ * just gets refresh tokens which the original method
+ * does not get.
+ *
+ * @param UserInterface $user
+ *   The user to get the tokens for.
+ *
+ * @return array
+ *   Array of token entities.
+ */
+function _user_api_collect_refresh_tokens(UserInterface $user) {
+  /** @var \Drupal\simple_oauth\ExpiredCollector $collector */
+  $collector = \Drupal::service('simple_oauth.expired_collector');
+
+  $tokenStorage = \Drupal::entityTypeManager()->getStorage('oauth2_token');
+  $clientStorage = \Drupal::entityTypeManager()->getStorage('consumer');
+
+  $ids = $tokenStorage
+    ->getQuery()
+    ->accessCheck()
+    ->condition('auth_user_id', $user->id())
+    ->condition('bundle', 'refresh_token')
+    ->execute();
+
+  $output = $ids
+    ? array_values($tokenStorage->loadMultiple(array_values($ids)))
+    : [];
+
+  // Also collect the tokens of the clients that have this account as the
+  // default user.
+  try {
+    $clients = array_values($clientStorage->loadByProperties([
+      'user_id' => $user->id(),
+    ]));
+  }
+  catch (QueryException) {
+    return $output;
+  }
+
+  // Append all the tokens for each of the clients having this account as the
+  // default.
+  $tokens = array_reduce($clients, function ($carry, $client) use ($collector) {
+    return array_merge($carry, $collector->collectForClient($client));
+  }, $output);
+
+  // Return a unique list.
+  $existing = [];
+  foreach ($tokens as $token) {
+    $existing[$token->id()] = $token;
+  }
+  return array_values($existing);
+}

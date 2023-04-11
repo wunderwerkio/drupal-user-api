@@ -1,0 +1,7 @@
+name: User API Test
+type: module
+description: Module for testing the user_api
+core_version_requirement: ^9 || ^10
+package: User
+dependencies:
+  - user_api:user_api

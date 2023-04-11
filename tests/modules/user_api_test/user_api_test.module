@@ -1,0 +1,13 @@
+<?php
+
+/**
+ * @file
+ * Module file.
+ */
+
+/**
+ * Implements hook_verification_provider_hash_supported_operations_alter().
+ */
+function user_api_test_verification_hash_supported_operations_alter(&$operations) {
+  $operations[] = 'cancel-account';
+}

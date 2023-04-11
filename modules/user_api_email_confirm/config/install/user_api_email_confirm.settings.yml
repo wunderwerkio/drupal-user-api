@@ -1,0 +1,4 @@
+notify:
+  mail_change_notification: true
+  mail_change_verification: true
+mail_change_timeout: 86400

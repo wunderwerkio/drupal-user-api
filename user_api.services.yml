@@ -1,0 +1,4 @@
+parameters:
+  user_api.register.fields_to_validate:
+    - 'name'
+    - 'mail'

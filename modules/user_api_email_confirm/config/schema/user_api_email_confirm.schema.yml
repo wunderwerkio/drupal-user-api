@@ -1,0 +1,28 @@
+user_api_email_confirm.settings:
+  type: config_object
+  label: 'User API E-Mail Confirm settings'
+  mapping:
+    notify:
+      type: mapping
+      label: 'Notify user'
+      mapping:
+        mail_change_notification:
+          type: boolean
+          label: 'Notify user when email changes'
+        mail_change_verification:
+          type: boolean
+          label: 'Require email verification when a user changes their email address'
+    mail_change_timeout:
+      type: integer
+      label: 'Mail change timeout'
+
+user_api_email_confirm.mail:
+  type: config_object
+  label: 'Email settings'
+  mapping:
+    mail_change_notification:
+      type: mail
+      label: 'Change mail notification'
+    mail_change_verification:
+      type: mail
+      label: 'Change mail verification'

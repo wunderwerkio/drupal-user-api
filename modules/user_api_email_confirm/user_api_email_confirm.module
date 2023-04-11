@@ -1,0 +1,268 @@
+<?php
+
+use Drupal\Component\Render\PlainTextOutput;
+use Drupal\Core\Session\AccountInterface;
+use Drupal\Core\StringTranslation\TranslatableMarkup;
+use Drupal\user\UserInterface;
+
+/**
+ * @file
+ * Module file.
+ */
+
+/**
+ * Update config_translation definitions to allow translation of user_api_email_confirm emails in user admin form.
+ */
+function user_api_email_confirm_config_translation_info(&$definitions) {
+  if (array_key_exists('entity.user.admin_form', $definitions)) {
+    $definitions['entity.user.admin_form']['names'][] = 'user_api_email_confirm.settings';
+    $definitions['entity.user.admin_form']['names'][] = 'user_api_email_confirm.mail';
+  }
+}
+
+/**
+ * hook_form_user_admin_settings_alter().
+ */
+function user_api_email_confirm_form_user_admin_settings_alter(&$form, \Drupal\Core\Form\FormStateInterface $form_state, $form_id) {
+  $config = \Drupal::config('user_api_email_confirm.settings');
+  $mailConfig = \Drupal::config('user_api_email_confirm.mail');
+
+  $email_token_help = new TranslatableMarkup('Available variables are: [site:name], [site:url], [site:mail], [user:display-name], [user:account-name], [user:mail], [site:login-url], [site:url-brief], [user:edit-url], [user:one-time-login-url], [user:mail-change-url], [user:cancel-url].');
+
+  $form['mail_change'] = [
+    '#type' => 'details',
+    '#title' => new TranslatableMarkup('Account email changing'),
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+    '#group' => 'email',
+    '#weight' => 11,
+  ];
+  $form['mail_change']['mail_change_notification'] = [
+    '#type' => 'details',
+    '#tree' => TRUE,
+    '#title' => new TranslatableMarkup('Notification of old email'),
+    '#description' => new TranslatableMarkup("Edit the email message sent to the user's old email address when the email address is changed.") . ' ' . $email_token_help,
+    '#open' => TRUE,
+  ];
+  $form['mail_change']['mail_change_notification']['enabled'] = [
+    '#type' => 'checkbox',
+    '#title' => new TranslatableMarkup('Notify user when email changes'),
+    '#default_value' => $config->get('notify.mail_change_notification'),
+  ];
+  $states = [
+    'invisible' => [
+      'input[name="mail_change_notification[enabled]"]' => ['checked' => FALSE],
+    ],
+  ];
+  $form['mail_change']['mail_change_notification']['subject'] = [
+    '#type' => 'textfield',
+    '#title' => new TranslatableMarkup('Subject'),
+    '#default_value' => $mailConfig->get('mail_change_notification.subject'),
+    '#maxlength' => 180,
+    '#states' => $states,
+  ];
+  $form['mail_change']['mail_change_notification']['body'] = [
+    '#type' => 'textarea',
+    '#title' => new TranslatableMarkup('Body'),
+    '#default_value' => $mailConfig->get('mail_change_notification.body'),
+    '#rows' => 12,
+    '#states' => $states,
+  ];
+  $form['mail_change']['mail_change_verification'] = [
+    '#type' => 'details',
+    '#tree' => TRUE,
+    '#title' => new TranslatableMarkup('Verification of new email'),
+    '#description' => new TranslatableMarkup("Edit the email message sent to user's new email address when the email address is changed.") . ' ' . $email_token_help,
+    '#open' => TRUE,
+  ];
+  $form['mail_change']['mail_change_verification']['enabled'] = [
+    '#type' => 'checkbox',
+    '#title' => new TranslatableMarkup('Require email verification when a user changes their email address'),
+    '#default_value' => $config->get('notify.mail_change_verification'),
+  ];
+  $states = [
+    'invisible' => [
+      'input[name="mail_change_verification[enabled]"]' => ['checked' => FALSE],
+    ],
+  ];
+  $form['mail_change']['mail_change_verification']['subject'] = [
+    '#type' => 'textfield',
+    '#title' => new TranslatableMarkup('Subject'),
+    '#default_value' => $mailConfig->get('mail_change_verification.subject'),
+    '#maxlength' => 180,
+    '#states' => $states,
+  ];
+  $form['mail_change']['mail_change_verification']['body'] = [
+    '#type' => 'textarea',
+    '#title' => new TranslatableMarkup('Body'),
+    '#default_value' => $mailConfig->get('mail_change_verification.body'),
+    '#rows' => 12,
+    '#states' => $states,
+  ];
+
+  $form['#submit'][] = '_user_api_email_confirm_form_user_admin_settings_submit';
+}
+
+/**
+ * Custom form submit handler for user admin form.
+ */
+function _user_api_email_confirm_form_user_admin_settings_submit(array &$form, \Drupal\Core\Form\FormStateInterface $form_state) {
+  \Drupal::configFactory()->getEditable('user_api_email_confirm.settings')
+    ->set('notify.mail_change_notification', $form_state->getValue(['mail_change_notification', 'enabled']))
+    ->set('notify.mail_change_verification', $form_state->getValue(['mail_change_verification', 'enabled']))
+    ->save();
+
+  \Drupal::configFactory()->getEditable('user_api_email_confirm.mail')
+      ->set('mail_change_notification', $form_state->getValue('mail_change_notification'))
+      ->set('mail_change_verification', $form_state->getValue('mail_change_verification'))
+      ->save();
+}
+
+/**
+ * hook_form_user_alter().
+ */
+function user_api_email_confirm_form_user_form_alter(&$form, \Drupal\Core\Form\FormStateInterface $form_state, $form_id) {
+  $form['actions']['submit']['#validate'][] = '_user_api_email_confirm_form_user_form_validate';
+}
+
+/**
+ * Custom form validation handler for user form.
+ */
+function _user_api_email_confirm_form_user_form_validate(array &$form, \Drupal\Core\Form\FormStateInterface $form_state) {
+  /** @var UserInterface $subject */
+  $subject = \Drupal::request()->get('user');
+  if (!$subject) {
+    return;
+  }
+
+  // Only care about updates from the same user.
+  if ($subject->id() !== \Drupal::currentUser()->id()) {
+    return;
+  }
+
+  if ($subject->getEmail() !== $form_state->getValue('mail')) {
+    $form_state->setErrorByName('mail', new TranslatableMarkup('Cannot directly update the email without verification!'));
+  }
+}
+
+/**
+ * hook_user_presave().
+ *
+ * This functions as a last-resort to prohibit directly changing the email address
+ * by the user itself. By default, this behavior should be handled by the user form.
+ */
+function user_api_email_confirm_user_presave(\Drupal\Core\Entity\EntityInterface $entity) {
+  // We only handle entity updates.
+  if ($entity instanceof UserInterface && !$entity->isNew()) {
+    /** @var UserInterface $oldUser */
+    $oldUser = $entity->original;
+
+    /** @var UserInterface $oldUser */
+    $user = $entity;
+
+    // Only check for updates done by the user itself.
+    if (\Drupal::currentUser()->id() !== $user->id()) {
+      return;
+    }
+
+    // Allow the rest resource to update mails.
+    if (\Drupal::request()->get('_route') === 'rest.user_api_email_confirm_update_mail.POST') {
+      return;
+    }
+
+    $requireVerification = \Drupal::config('user_api_email_confirm.settings')->get('notify.mail_change_verification');
+
+    // Intercept if user is trying to directly change email but verification is required.
+    if ($requireVerification && $oldUser->getEmail() !== $user->getEmail()) {
+      throw new \Exception('Cannot change email directly!');
+    }
+  }
+}
+
+/**
+ * Implements hook_verification_provider_hash_supported_operations_alter().
+ */
+function user_api_email_confirm_verification_hash_supported_operations_alter(&$operations) {
+  $operations[] = 'set-email';
+}
+
+/**
+ * Implements hook_verification_provider_hash_timeout_alter().
+ */
+function user_api_email_confirm_verification_hash_timeout_alter(&$timeout, $operation) {
+  if ($operation === 'set-email') {
+    $timeout = (int) (\Drupal::config('user_api_email_confirm.settings')->get('mail_change_timeout') ?? 86400);
+  }
+}
+
+/**
+ * Implements hook_mail().
+ */
+function user_api_email_confirm_mail($key, &$message, $params) {
+  $token_service = \Drupal::token();
+  $language_manager = \Drupal::languageManager();
+  $langcode = $message['langcode'];
+  $variables = ['user' => $params['account']];
+
+  $language = $language_manager->getLanguage($langcode);
+  $original_language = $language_manager->getConfigOverrideLanguage();
+  $language_manager->setConfigOverrideLanguage($language);
+  $mail_config = \Drupal::config('user_api_email_confirm.mail');
+
+  $token_options = ['langcode' => $langcode, 'callback' => 'user_mail_tokens', 'clear' => TRUE];
+  $message['subject'] .= PlainTextOutput::renderFromHtml($token_service->replace($mail_config->get($key . '.subject'), $variables, $token_options));
+  $message['body'][] = $token_service->replace($mail_config->get($key . '.body'), $variables, $token_options);
+
+  $language_manager->setConfigOverrideLanguage($original_language);
+}
+
+/**
+ * Custom user email notification.
+ *
+ * This is basically the same as _user_mail_notify() but altered
+ * to work with the emails introduced by this module.
+ *
+ * @param string $op
+ *   The operation being performed on the account. Possible values:
+ *   - 'mail_change_verification': Verification email sent to the user
+ *     new email address to confirm ownership.
+ *   - 'mail_change_notification': Info email sent to the user's current
+ *     email address to inform about the email change.
+ * @param \Drupal\Core\Session\AccountInterface $account
+ *   The user object of the account being notified. Must contain at
+ *   least the fields 'uid', 'name', and 'mail'.
+ *
+ * @return array
+ *   An array containing various information about the message.
+ *   See \Drupal\Core\Mail\MailManagerInterface::mail() for details.
+ *
+ * @see _user_mail_notify()
+ */
+function _user_api_email_confirm_mail_notify($op, AccountInterface $account) {
+  if (\Drupal::config('user_api_email_confirm.settings')->get('notify.' . $op)) {
+    $params['account'] = $account;
+    $langcode = $account->getPreferredLangcode();
+    // Get the custom site notification email to use as the from email address
+    // if it has been set.
+    $site_mail = \Drupal::config('system.site')->get('mail_notification');
+    // If the custom site notification email has not been set, we use the site
+    // default for this.
+    if (empty($site_mail)) {
+      $site_mail = \Drupal::config('system.site')->get('mail');
+    }
+    if (empty($site_mail)) {
+      $site_mail = ini_get('sendmail_from');
+    }
+
+    $mail = \Drupal::service('plugin.manager.mail')->mail('user_api_email_confirm', $op, $account->getEmail(), $langcode, $params, $site_mail);
+  }
+
+  return empty($mail) ? NULL : $mail['result'];
+}
+
+/**
+ * Implement hook_magic_code_user_mail_token_operations_alter().
+ */
+function user_api_email_confirm_magic_code_user_mail_token_operations_alter(&$operations) {
+  $operations[] = 'set-email';
+}

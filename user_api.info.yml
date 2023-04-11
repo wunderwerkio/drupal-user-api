@@ -1,0 +1,10 @@
+name: User API
+type: module
+description: Adds an api to work with user registration and management.
+core_version_requirement: ^9 || ^10
+package: User
+dependencies:
+  - drupal:rest
+  - drupal:user
+  - simple_oauth:simple_oauth
+  - verification:verification
