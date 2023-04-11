@@ -65,10 +65,6 @@ class AdvancedUserRegistrationTest extends EntityKernelTestBase {
     $this->installConfig(['user']);
     $this->installSchema('user', ['users_data']);
 
-    $this->drupalSetUpCurrentUser();
-    $this->setCurrentUser(User::getAnonymousUser());
-    $this->grantPermissions(Role::load(Role::ANONYMOUS_ID), ['restful post user_api_user_registration']);
-
     RestResourceConfig::create([
       'id' => 'user_api_user_registration',
       'plugin_id' => 'user_api_user_registration',
@@ -79,6 +75,10 @@ class AdvancedUserRegistrationTest extends EntityKernelTestBase {
         'authentication' => ['cookie'],
       ],
     ])->save();
+
+    $this->drupalSetUpCurrentUser();
+    $this->setCurrentUser(User::getAnonymousUser());
+    $this->grantPermissions(Role::load(Role::ANONYMOUS_ID), ['restful post user_api_user_registration']);
 
     $this->userSettings = $this->config('user.settings');
 
