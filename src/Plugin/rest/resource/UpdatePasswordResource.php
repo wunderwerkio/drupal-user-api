@@ -10,12 +10,14 @@ use Drupal\Core\Password\PasswordInterface;
 use Drupal\Core\Session\AccountProxyInterface;
 use Drupal\rest\Plugin\ResourceBase;
 use Drupal\user\UserInterface;
+use Drupal\user_api\ErrorCode;
 use Drupal\verification\Service\RequestVerifier;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Component\HttpFoundation\Response;
+use Wunderwerk\HttpApiUtils\HttpApiValidationTrait;
+use Wunderwerk\JsonApiError\JsonApiErrorResponse;
 
 /**
  * Provides a resource to update a user's password.
@@ -29,6 +31,24 @@ use Symfony\Component\HttpFoundation\Response;
  * )
  */
 class UpdatePasswordResource extends ResourceBase {
+
+  use HttpApiValidationTrait;
+
+  /**
+   * Request payload schema.
+   */
+  protected array $schema = [
+    'type' => 'object',
+    'properties' => [
+      'newPassword' => [
+        'type' => 'string',
+      ],
+      'currentPassword' => [
+        'type' => 'string',
+      ],
+    ],
+    'required' => ['newPassword'],
+  ];
 
   /**
    * The user entity.
@@ -100,7 +120,12 @@ class UpdatePasswordResource extends ResourceBase {
   public function post(Request $request) {
     $user = $this->getCurrentUser();
     if (!$user || !$user->isAuthenticated()) {
-      return new JsonResponse(['error' => 'User not logged in.'], Response::HTTP_UNAUTHORIZED);
+      return JsonApiErrorResponse::fromError(
+        status: 403,
+        code: ErrorCode::UNAUTHENTICATED->getCode(),
+        title: 'Unauthenticated',
+        detail: 'You are not authenticated.',
+      );
     }
     $this->user = $user;
 
@@ -108,10 +133,9 @@ class UpdatePasswordResource extends ResourceBase {
     $payload = $request->getContent();
     $data = Json::decode($payload);
 
-    if (!array_key_exists('newPassword', $data)) {
-      return new JsonResponse([
-        'error' => 'Invalid payload: Missing field "newPassword".',
-      ], Response::HTTP_BAD_REQUEST);
+    $result = $this->validateArray($data, $this->schema);
+    if (!$result->isValid()) {
+      return $result->getResponse();
     }
 
     // Verify the supported operations.
@@ -136,9 +160,12 @@ class UpdatePasswordResource extends ResourceBase {
       return $this->handlePasswordUpdateWithCurrentPassword($newPassword, $data['currentPassword']);
     }
 
-    return new JsonResponse([
-      'error' => 'Unknown error occured!',
-    ], Response::HTTP_INTERNAL_SERVER_ERROR);
+    return JsonApiErrorResponse::fromError(
+      status: 400,
+      code: ErrorCode::PASSWORD_UPDATE_FAILED->getCode(),
+      title: 'Could not update password',
+      detail: 'The request is neither verified to update the password directly, nor was the currentPassword supplied in the request payload.',
+    );
   }
 
   /**
@@ -154,28 +181,15 @@ class UpdatePasswordResource extends ResourceBase {
     if ($currentPassHash = $this->user->getPassword()) {
       // Check against currently set password.
       if (!$this->passwordChecker->check($currentPassword, $currentPassHash)) {
-        return new JsonResponse(['error' => 'The current password is incorrect.'], Response::HTTP_BAD_REQUEST);
+        return JsonApiErrorResponse::fromError(
+          status: 400,
+          code: ErrorCode::CURRENT_PASSWORD_INVALID->getCode(),
+          title: 'Incorrect current password',
+        );
       }
     }
 
     return $this->setPassword($newPassword);
-  }
-
-  /**
-   * Notify user about password reset.
-   */
-  protected function handleResetPassword($reset) {
-    if (!$reset) {
-      return new JsonResponse([
-        'error' => 'Invalid payload.',
-      ], Response::HTTP_BAD_REQUEST);
-    }
-
-    _user_mail_notify('password_reset', $this->user);
-
-    return new JsonResponse([
-      'status' => 'success',
-    ]);
   }
 
   /**

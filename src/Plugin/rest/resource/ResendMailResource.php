@@ -10,11 +10,13 @@ use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Session\AccountProxyInterface;
 use Drupal\rest\Plugin\ResourceBase;
 use Drupal\user\UserInterface;
+use Drupal\user_api\ErrorCode;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
-use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\Request;
+use Wunderwerk\HttpApiUtils\HttpApiValidationTrait;
+use Wunderwerk\JsonApiError\JsonApiErrorResponse;
 
 /**
  * Provides a resource to resend a verification email.
@@ -28,6 +30,26 @@ use Symfony\Component\HttpFoundation\Request;
  * )
  */
 class ResendMailResource extends ResourceBase {
+
+  use HttpApiValidationTrait;
+
+  /**
+   * Request payload schema.
+   */
+  protected array $schema = [
+    'type' => 'object',
+    'properties' => [
+      'email' => [
+        'type' => 'string',
+        'format' => 'email',
+      ],
+      'operation' => [
+        'type' => 'string',
+        'enum' => ['register', 'cancel'],
+      ],
+    ],
+    'required' => ['email', 'operation'],
+  ];
 
   /**
    * The user entity.
@@ -93,18 +115,9 @@ class ResendMailResource extends ResourceBase {
     $jsonBody = $request->getContent();
     $data = Json::decode($jsonBody);
 
-    if (!array_key_exists('email', $data)) {
-      return new JsonResponse(
-        ['error' => 'Missing field "email"'],
-        Response::HTTP_BAD_REQUEST
-      );
-    }
-
-    if (!array_key_exists('operation', $data)) {
-      return new JsonResponse(
-        ['error' => 'Missing field "operation"'],
-        Response::HTTP_BAD_REQUEST
-      );
+    $result = $this->validateArray($data, $this->schema);
+    if (!$result->isValid()) {
+      return $result->getResponse();
     }
 
     $operation = $data['operation'];
@@ -113,15 +126,15 @@ class ResendMailResource extends ResourceBase {
       'mail' => $data['email'],
     ]);
     if (empty($result)) {
-      return new JsonResponse(
-        ['error' => 'Invalid email address.'],
-        Response::HTTP_BAD_REQUEST
+      return JsonApiErrorResponse::fromError(
+        status: 400,
+        code: ErrorCode::INVALID_EMAIL->getCode(),
+        title: 'Invalid email address.'
       );
     }
 
     /** @var \Drupal\user\UserInterface $user */
     $user = reset($result);
-    $currentUser = $this->getCurrentUser();
 
     if (
       $operation === "register" &&
@@ -129,9 +142,10 @@ class ResendMailResource extends ResourceBase {
       $this->userSettings->get('verify_mail')
     ) {
       if ($user->getLastAccessedTime() !== "0") {
-        return new JsonResponse(
-          ['error' => 'Account already verified!'],
-          Response::HTTP_BAD_REQUEST
+        return JsonApiErrorResponse::fromError(
+          status: 400,
+          code: ErrorCode::ALREADY_VERIFIED->getCode(),
+          title: 'Account is already verified!'
         );
       }
 

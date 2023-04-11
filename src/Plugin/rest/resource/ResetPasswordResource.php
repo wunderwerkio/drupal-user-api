@@ -9,11 +9,13 @@ use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Session\AccountProxyInterface;
 use Drupal\rest\Plugin\ResourceBase;
 use Drupal\user\UserInterface;
+use Drupal\user_api\ErrorCode;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
-use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\Request;
+use Wunderwerk\HttpApiUtils\HttpApiValidationTrait;
+use Wunderwerk\JsonApiError\JsonApiErrorResponse;
 
 /**
  * Provides a resource to reset a user's password.
@@ -27,6 +29,22 @@ use Symfony\Component\HttpFoundation\Request;
  * )
  */
 class ResetPasswordResource extends ResourceBase {
+
+  use HttpApiValidationTrait;
+
+  /**
+   * Request payload schema.
+   */
+  protected array $schema = [
+    'type' => 'object',
+    'properties' => [
+      'email' => [
+        'type' => 'string',
+        'format' => 'email',
+      ],
+    ],
+    'required' => ['email'],
+  ];
 
   /**
    * The user entity.
@@ -88,20 +106,19 @@ class ResetPasswordResource extends ResourceBase {
     $jsonBody = $request->getContent();
     $data = Json::decode($jsonBody);
 
-    if (!array_key_exists('email', $data)) {
-      return new JsonResponse(
-        ['error' => 'Missing field "email"'],
-        Response::HTTP_BAD_REQUEST
-      );
+    $result = $this->validateArray($data, $this->schema);
+    if (!$result->isValid()) {
+      return $result->getResponse();
     }
 
     $result = $this->entityTypeManager->getStorage('user')->loadByProperties([
       'mail' => $data['email'],
     ]);
     if (empty($result)) {
-      return new JsonResponse(
-        ['error' => 'Invalid email address.'],
-        Response::HTTP_BAD_REQUEST
+      return JsonApiErrorResponse::fromError(
+        status: 400,
+        code: ErrorCode::INVALID_EMAIL->getCode(),
+        title: 'Invalid email address.'
       );
     }
 
@@ -112,9 +129,10 @@ class ResetPasswordResource extends ResourceBase {
     // If user is logged in, the reset password email can only be sent
     // if the requested email matches that of the authenticated account.
     if ($currentUser->isAuthenticated() && $currentUser->id() !== $user->id()) {
-      return new JsonResponse(
-        ['error' => 'E-Mail address does not match.'],
-        Response::HTTP_FORBIDDEN,
+      return JsonApiErrorResponse::fromError(
+        status: 403,
+        code: ErrorCode::EMAIL_NOT_MATCHING->getCode(),
+        title: 'E-Mail address does not match'
       );
     }
 

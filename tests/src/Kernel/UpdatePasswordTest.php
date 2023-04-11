@@ -157,7 +157,7 @@ class UpdatePasswordTest extends EntityKernelTestBase {
     $request = $this->createJsonRequest('POST', $this->url->toString(), $content);
     $request->headers->set('X-Verification-Hash', sprintf('%s$$%s', 'invalid-hash', $timestamp));
     $response = $this->httpKernel->handle($request);
-    $this->assertEquals(500, $response->getStatusCode());
+    $this->assertEquals(400, $response->getStatusCode());
   }
 
   /**
@@ -170,7 +170,7 @@ class UpdatePasswordTest extends EntityKernelTestBase {
 
     $request = $this->createJsonRequest('POST', $this->url->toString(), $content);
     $response = $this->httpKernel->handle($request);
-    $this->assertEquals(400, $response->getStatusCode());
+    $this->assertEquals(422, $response->getStatusCode());
   }
 
 }
