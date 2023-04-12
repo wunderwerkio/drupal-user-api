@@ -111,6 +111,14 @@ class ResetPasswordTest extends EntityKernelTestBase {
       'email' => $this->user->getEmail(),
     ];
 
+    // Invalid payload.
+    $request = $this->createJsonRequest('POST', $this->url->toString(), []);
+    $response = $this->httpKernel->handle($request);
+    $this->assertEquals(422, $response->getStatusCode(), $response->getContent());
+
+    $count = count($this->getMails());
+    $this->assertEquals(0, $count);
+
     // FAILURE - Invalid email.
     $request = $this->createJsonRequest('POST', $this->url->toString(), ['email' => 'wrong@example.com']);
     $response = $this->httpKernel->handle($request);

@@ -9,7 +9,9 @@ use Drupal\Core\Url;
 use Drupal\KernelTests\Core\Entity\EntityKernelTestBase;
 use Drupal\rest\Entity\RestResourceConfig;
 use Drupal\Tests\user_api\Kernel\UserApiTestTrait;
+use Drupal\user\Entity\Role;
 use Drupal\user\Entity\User;
+use Drupal\user\UserInterface;
 use Drupal\verification_hash\VerificationHashManager;
 
 /**
@@ -65,6 +67,11 @@ class CancelAccountResourceTest extends EntityKernelTestBase {
   protected VerificationHashManager $hashManager;
 
   /**
+   * The user.
+   */
+  protected UserInterface $user;
+
+  /**
    * {@inheritdoc}
    */
   protected function setUp(): void {
@@ -78,7 +85,7 @@ class CancelAccountResourceTest extends EntityKernelTestBase {
     $this->installSchema('user', ['users_data']);
     $this->installConfig(['simple_oauth']);
 
-    $this->setUpCurrentUser();
+    $this->setUpCurrentUser(['uid' => 0]);
 
     RestResourceConfig::create([
       'id' => 'user_api_cancel_account',
@@ -106,6 +113,9 @@ class CancelAccountResourceTest extends EntityKernelTestBase {
       'restful post user_api_cancel_account',
     ]);
     $this->setCurrentUser($this->user);
+
+    $anonRole = Role::load(Role::ANONYMOUS_ID);
+    $this->grantPermissions($anonRole, ['restful post user_api_cancel_account']);
 
     $this->url = Url::fromRoute('rest.user_api_cancel_account.POST');
 

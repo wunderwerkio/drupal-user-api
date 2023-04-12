@@ -10,12 +10,14 @@ use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Session\AccountProxyInterface;
 use Drupal\rest\Plugin\ResourceBase;
 use Drupal\user\UserInterface;
+use Drupal\user_api\ErrorCode;
 use Drupal\verification\Service\RequestVerifier;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Component\HttpFoundation\Response;
+use Wunderwerk\HttpApiUtils\HttpApiValidationTrait;
+use Wunderwerk\JsonApiError\JsonApiErrorResponse;
 
 /**
  * Provides a resource to change user email with confirmation.
@@ -30,10 +32,21 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class UpdateMailResource extends ResourceBase {
 
+  use HttpApiValidationTrait;
+
   /**
-   * The user entity.
+   * Request payload schema.
    */
-  protected UserInterface $user;
+  protected array $schema = [
+    'type' => 'object',
+    'properties' => [
+      'email' => [
+        'type' => 'string',
+        'format' => 'email',
+      ],
+    ],
+    'required' => ['email'],
+  ];
 
   /**
    * Constructs a new OneTimeLoginResource object.
@@ -99,26 +112,32 @@ class UpdateMailResource extends ResourceBase {
    */
   public function post(Request $request) {
     $user = $this->getCurrentUser();
-    if (!$user) {
-      return new JsonResponse(['error' => 'User not logged in.'], Response::HTTP_UNAUTHORIZED);
+    if (!$user || !$user->isAuthenticated()) {
+      return JsonApiErrorResponse::fromError(
+        status: 403,
+        code: ErrorCode::UNAUTHENTICATED->getCode(),
+        title: 'Unauthenticated',
+        detail: 'You are not authenticated.',
+      );
     }
-    $this->user = $user;
 
     // Resource does not support handling of email change without verification.
     if (!$this->isVerificationEnabled()) {
-      return new JsonResponse([
-        'error' => 'Verification is disabled. Please change email via JSON:API.',
-      ], Response::HTTP_INTERNAL_SERVER_ERROR);
+      return JsonApiErrorResponse::fromError(
+        status: 500,
+        code: ErrorCode::EMAIL_VERIFICATION_DISABLED->getCode(),
+        title: 'Verification disabled.',
+        detail: 'Verification is disabled. Please change email via JSON:API.',
+      );
     }
 
     // Validate payload.
     $payload = $request->getContent();
     $data = Json::decode($payload);
 
-    if (!array_key_exists('email', $data)) {
-      return new JsonResponse([
-        'error' => 'Invalid payload: Missing field "email".',
-      ], Response::HTTP_BAD_REQUEST);
+    $result = $this->validateArray($data, $this->schema);
+    if (!$result->isValid()) {
+      return $result->getResponse();
     }
 
     $mail = $data['email'];
@@ -128,7 +147,7 @@ class UpdateMailResource extends ResourceBase {
       return $response;
     }
 
-    return $this->setMail($mail);
+    return $this->setMail($mail, $user);
   }
 
   /**
@@ -136,13 +155,15 @@ class UpdateMailResource extends ResourceBase {
    *
    * @param string $mail
    *   The new email address.
+   * @param \Drupal\user\UserInterface $user
+   *   The user entity.
    *
    * @return \Symfony\Component\HttpFoundation\JsonResponse
    *   The response indicating success.
    */
-  protected function setMail(string $mail) {
-    $this->user->setEmail($mail);
-    $this->user->save();
+  protected function setMail(string $mail, UserInterface $user) {
+    $user->setEmail($mail);
+    $user->save();
 
     return new JsonResponse([
       'status' => 'success',

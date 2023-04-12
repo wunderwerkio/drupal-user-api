@@ -45,7 +45,6 @@ class ResendMailResource extends ResourceBase {
       ],
       'operation' => [
         'type' => 'string',
-        'enum' => ['register', 'cancel'],
       ],
     ],
     'required' => ['email', 'operation'],
@@ -136,37 +135,57 @@ class ResendMailResource extends ResourceBase {
     /** @var \Drupal\user\UserInterface $user */
     $user = reset($result);
 
-    if (
-      $operation === "register" &&
-      $this->userSettings->get('register') === UserInterface::REGISTER_VISITORS &&
-      $this->userSettings->get('verify_mail')
-    ) {
-      if ($user->getLastAccessedTime() !== "0") {
-        return JsonApiErrorResponse::fromError(
-          status: 400,
-          code: ErrorCode::ALREADY_VERIFIED->getCode(),
-          title: 'Account is already verified!'
-        );
-      }
-
-      _user_mail_notify('register_no_approval_required', $user);
+    switch ($operation) {
+      case 'register':
+        return $this->handleRegister($user);
     }
 
-    return new JsonResponse([
-      'status' => 'success',
-    ]);
   }
 
   /**
-   * Loads the user entity for the current user.
+   * Handles registration verification email resend.
    *
-   * @return \Drupal\user\UserInterface|null
+   * @param \Drupal\user\UserInterface $user
    *   The user entity.
    */
-  protected function getCurrentUser(): ?UserInterface {
-    return $this->entityTypeManager->getStorage('user')->load(
-      $this->currentUser->id()
-    );
+  protected function handleRegister(UserInterface $user) {
+    if ($this->userSettings->get('register') !== UserInterface::REGISTER_VISITORS) {
+      return JsonApiErrorResponse::fromError(
+        status: 500,
+        code: ErrorCode::RESEND_MAIL_VISITOR_ACCOUNT_CREATION_DISABLED->getCode(),
+        title: 'Registration is disabled.'
+      );
+    }
+
+    if (!$this->userSettings->get('verify_mail')) {
+      return JsonApiErrorResponse::fromError(
+        status: 500,
+        code: ErrorCode::RESEND_MAIL_REGISTER_VERIFY_MAIL_DISABLED->getCode(),
+        title: 'Email verification is disabled.'
+      );
+    }
+
+    // Make sure not to resend verification email if user is already verified.
+    if ($user->getLastAccessedTime() !== "0") {
+      return JsonApiErrorResponse::fromError(
+        status: 400,
+        code: ErrorCode::ALREADY_VERIFIED->getCode(),
+        title: 'Account is already verified!'
+      );
+    }
+
+    _user_mail_notify('register_no_approval_required', $user);
+
+    return $this->createSuccessResponse();
+  }
+
+  /**
+   * Create a success response.
+   */
+  protected function createSuccessResponse() {
+    return new JsonResponse([
+      'status' => 'success',
+    ]);
   }
 
 }

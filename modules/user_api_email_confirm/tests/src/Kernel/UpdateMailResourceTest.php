@@ -215,4 +215,14 @@ class UpdateMailResourceTest extends EntityKernelTestBase {
     $this->assertStringContainsString("hash_invalid", $response->getContent());
   }
 
+  /**
+   * Test mail change with invalid payload.
+   */
+  public function testMailChangeWithInvalidPayload() {
+    $request = $this->createJsonRequest('POST', $this->url->toString(), []);
+    $response = $this->httpKernel->handle($request);
+
+    $this->assertEquals(422, $response->getStatusCode(), $response->getContent());
+  }
+
 }

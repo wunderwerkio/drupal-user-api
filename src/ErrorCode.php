@@ -19,6 +19,11 @@ enum ErrorCode: string {
   case PASSWORD_UPDATE_FAILED = 'password_update_failed';
   case CURRENT_PASSWORD_INVALID = 'current_password_invalid';
 
+  case RESEND_MAIL_VISITOR_ACCOUNT_CREATION_DISABLED = 'resend_mail_visitor_account_creation_disabled';
+  case RESEND_MAIL_REGISTER_VERIFY_MAIL_DISABLED = 'resend_mail_register_verify_mail_disabled';
+  case RESEND_MAIL_ALREADY_CANCELED = 'resend_mail_already_canceled';
+  case EMAIL_VERIFICATION_DISABLED = 'email_verification_disabled';
+
   /**
    * Returns the error code prefixed with the
    * module name.
