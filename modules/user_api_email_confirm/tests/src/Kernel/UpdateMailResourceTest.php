@@ -9,6 +9,7 @@ use Drupal\Core\Url;
 use Drupal\KernelTests\Core\Entity\EntityKernelTestBase;
 use Drupal\rest\Entity\RestResourceConfig;
 use Drupal\Tests\user_api\Kernel\UserApiTestTrait;
+use Drupal\user\Entity\Role;
 use Drupal\user\Entity\User;
 use Drupal\user\UserInterface;
 use Drupal\verification_hash\VerificationHashManager;
@@ -105,6 +106,9 @@ class UpdateMailResourceTest extends EntityKernelTestBase {
     ]);
     $this->setCurrentUser($this->user);
 
+    $anonRole = Role::load(Role::ANONYMOUS_ID);
+    $this->grantPermissions($anonRole, ['restful post user_api_email_confirm_update_mail']);
+
     $this->hashManager = $this->container->get('verification_hash.manager');
   }
 
@@ -163,6 +167,25 @@ class UpdateMailResourceTest extends EntityKernelTestBase {
 
     $this->assertNull($exception);
     $this->assertEquals($newMail, $this->user->getEmail());
+  }
+
+  /**
+   * Test email change preliminary checks.
+   */
+  public function testEmailChangePreliminaryChecks() {
+    // FAILURE - Anonymous account.
+    $this->setCurrentUser(User::getAnonymousUser());
+    $request = $this->createJsonRequest('POST', $this->url->toString(), []);
+    $response = $this->httpKernel->handle($request);
+    $this->assertEquals(403, $response->getStatusCode(), $response->getContent());
+
+    // FAILURE - Verification is not enabled.
+    $this->setCurrentUser($this->user);
+    $this->config('user_api_email_confirm.settings')->set('notify.mail_change_verification', FALSE)->save();
+
+    $request = $this->createJsonRequest('POST', $this->url->toString(), []);
+    $response = $this->httpKernel->handle($request);
+    $this->assertEquals(500, $response->getStatusCode(), $response->getContent());
   }
 
   /**

@@ -9,6 +9,8 @@ use Drupal\Core\Url;
 use Drupal\KernelTests\Core\Entity\EntityKernelTestBase;
 use Drupal\rest\Entity\RestResourceConfig;
 use Drupal\Tests\user_api\Kernel\UserApiTestTrait;
+use Drupal\user\Entity\Role;
+use Drupal\user\Entity\User;
 use Drupal\user\UserInterface;
 
 /**
@@ -95,6 +97,9 @@ class VerifyMailResourceTest extends EntityKernelTestBase {
       'restful post user_api_email_confirm_verify_mail',
     ]);
     $this->setCurrentUser($this->user);
+
+    $anonRole = Role::load(Role::ANONYMOUS_ID);
+    $this->grantPermissions($anonRole, ['restful post user_api_email_confirm_verify_mail']);
   }
 
   /**
@@ -162,9 +167,17 @@ class VerifyMailResourceTest extends EntityKernelTestBase {
   }
 
   /**
-   * Test mail change with invalid payload.
+   * Test email change preliminary checks.
    */
-  public function testMailChangeWithInvalidPayload() {
+  public function testEmailVerifyPreliminaryChecks() {
+    // FAILURE - Anonymous account.
+    $this->setCurrentUser(User::getAnonymousUser());
+    $request = $this->createJsonRequest('POST', $this->url->toString(), []);
+    $response = $this->httpKernel->handle($request);
+    $this->assertEquals(403, $response->getStatusCode(), $response->getContent());
+
+    // FAILURE - Invalid payload.
+    $this->setCurrentUser($this->user);
     $request = $this->createJsonRequest('POST', $this->url->toString(), []);
     $response = $this->httpKernel->handle($request);
 
