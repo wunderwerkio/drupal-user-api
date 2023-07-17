@@ -122,7 +122,7 @@ function _user_api_email_confirm_form_user_admin_settings_submit(array &$form, \
  * hook_form_user_alter().
  */
 function user_api_email_confirm_form_user_form_alter(&$form, \Drupal\Core\Form\FormStateInterface $form_state, $form_id) {
-  $form['actions']['submit']['#validate'][] = '_user_api_email_confirm_form_user_form_validate';
+  $form['#validate'][] = '_user_api_email_confirm_form_user_form_validate';
 }
 
 /**
