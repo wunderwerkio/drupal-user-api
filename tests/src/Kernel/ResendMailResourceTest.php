@@ -142,6 +142,17 @@ class ResendMailResourceTest extends EntityKernelTestBase {
 
     $count = count($this->getMails());
     $this->assertEquals(0, $count);
+
+    // Invalid operation.
+    $request = $this->createJsonRequest('POST', $this->url->toString(), [
+      'email' => $this->user->getEmail(),
+      'operation' => 'invalid',
+    ]);
+    $response = $this->httpKernel->handle($request);
+    $this->assertEquals(400, $response->getStatusCode(), $response->getContent());
+
+    $count = count($this->getMails());
+    $this->assertEquals(0, $count);
   }
 
   /**

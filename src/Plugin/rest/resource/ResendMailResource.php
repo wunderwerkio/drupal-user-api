@@ -138,6 +138,14 @@ class ResendMailResource extends ResourceBase {
     switch ($operation) {
       case 'register':
         return $this->handleRegister($user);
+
+      default:
+        return JsonApiErrorResponse::fromError(
+          status: 400,
+          code: ErrorCode::INVALID_OPERATION->getCode(),
+          title: 'Invalid operation.',
+          detail: sprintf('The operation "%s" is not supported!', $operation),
+        );
     }
 
   }

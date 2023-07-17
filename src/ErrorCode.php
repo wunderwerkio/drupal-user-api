@@ -15,6 +15,7 @@ enum ErrorCode: string {
   case UNAUTHENTICATED = 'unauthenticated';
   case INVALID_EMAIL = 'invalid_email';
   case EMAIL_NOT_MATCHING = 'email_not_matching';
+  case INVALID_OPERATION = 'invalid_operation';
   case ALREADY_VERIFIED = 'already_verified';
   case PASSWORD_UPDATE_FAILED = 'password_update_failed';
   case CURRENT_PASSWORD_INVALID = 'current_password_invalid';
