@@ -1,3 +1,10 @@
+# Important Notice
+
+The version control was moved to Drupal's GitLab instance!  
+See https://www.drupal.org/project/user_api for more info!
+
+---
+
 # User API module
 
 This module adds multiple REST resources to ease working with user entities via a API.
